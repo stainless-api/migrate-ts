@@ -1,0 +1,29 @@
+{
+  "name": "@stainless-api/migrate",
+  "version": "0.0.1",
+  "scripts": {
+    "test": "node --test --experimental-strip-types",
+	"build": "esbuild src/migrate.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/migrate.mjs"
+  },
+  "bin": "dist/migrate.mjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stainless-api/migrate-ts.git"
+  },
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "@babel/generator": "^7.26.10",
+    "@babel/parser": "^7.26.10",
+    "@babel/traverse": "^7.26.10",
+    "@babel/types": "^7.26.10",
+    "@types/babel__generator": "^7.6.8",
+    "@types/babel__traverse": "^7.20.6",
+    "@types/node": "22",
+    "esbuild": "^0.25.1",
+    "magic-string": "^0.30.17",
+    "ts-dedent": "^2.2.0",
+    "typescript": "^5.8.2"
+  },
+  "packageManager": "pnpm@9.15.5+sha512.845196026aab1cc3f098a0474b64dfbab2afe7a1b4e91dd86895d8e4aa32a7a6d03049e2d0ad770bbe4de023a7122fb68c1a1d6e0d033c7076085f9d5d4800d4"
+}
