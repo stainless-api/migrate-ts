@@ -1,87 +1,129 @@
 import { describe, test } from "node:test";
-import createTransformer from "../src/migrate.ts";
+import transform from "../src/migrate.ts";
 import { equal } from "node:assert/strict";
 import { dedent } from "ts-dedent";
+import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 
-const transformer = createTransformer({
-  pkg: "openai",
-  githubRepo: "https://github.com/openai/openai-node/blob/alpha",
-  clientClass: "OpenAI",
-  methods: [],
-});
+const migrationConfig = JSON.parse(
+  readFileSync(
+    fileURLToPath(import.meta.resolve("./migrationConfig.json")),
+    "utf-8"
+  )
+);
 
 describe("it rewrites imports from src", () => {
   test("esm import", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: 'import { OpenAI } from "openai/src";',
-      }),
+      transform(
+        {
+          path: "index.ts",
+          source: 'import { OpenAI } from "openai/src";',
+        },
+        undefined,
+        { migrationConfig }
+      ),
       'import { OpenAI } from "openai";'
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: 'import { OpenAI } from "openai/src/index";',
-      }),
+      transform(
+        {
+          path: "index.ts",
+          source: 'import { OpenAI } from "openai/src/index";',
+        },
+        undefined,
+        { migrationConfig }
+      ),
       'import { OpenAI } from "openai/index";'
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: 'import { OpenAI } from "openai/src/index.js";',
-      }),
+      transform(
+        {
+          path: "index.ts",
+          source: 'import { OpenAI } from "openai/src/index.js";',
+        },
+        undefined,
+        { migrationConfig }
+      ),
       'import { OpenAI } from "openai/index.js";'
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: 'import { OpenAI } from "openai/src/index.mjs";',
-      }),
+      transform(
+        {
+          path: "index.ts",
+          source: 'import { OpenAI } from "openai/src/index.mjs";',
+        },
+        undefined,
+        { migrationConfig }
+      ),
       'import { OpenAI } from "openai/index.mjs";'
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: 'import { OpenAI } from "openai/src/index.ts";',
-      }),
+      transform(
+        {
+          path: "index.ts",
+          source: 'import { OpenAI } from "openai/src/index.ts";',
+        },
+        undefined,
+        { migrationConfig }
+      ),
       'import { OpenAI } from "openai/index";'
     );
   });
   test("cjs require", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: 'const { OpenAI } = require("openai/src");',
-      }),
+      transform(
+        {
+          path: "index.ts",
+          source: 'const { OpenAI } = require("openai/src");',
+        },
+        undefined,
+        { migrationConfig }
+      ),
       'const { OpenAI } = require("openai");'
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: 'const { OpenAI } = require("openai/src/index");',
-      }),
+      transform(
+        {
+          path: "index.ts",
+          source: 'const { OpenAI } = require("openai/src/index");',
+        },
+        undefined,
+        { migrationConfig }
+      ),
       'const { OpenAI } = require("openai/index");'
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: 'const { OpenAI } = require("openai/src/index.js");',
-      }),
+      transform(
+        {
+          path: "index.ts",
+          source: 'const { OpenAI } = require("openai/src/index.js");',
+        },
+        undefined,
+        { migrationConfig }
+      ),
       'const { OpenAI } = require("openai/index.js");'
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: 'const { OpenAI } = require("openai/src/index.mjs");',
-      }),
+      transform(
+        {
+          path: "index.ts",
+          source: 'const { OpenAI } = require("openai/src/index.mjs");',
+        },
+        undefined,
+        { migrationConfig }
+      ),
       'const { OpenAI } = require("openai/index.mjs");'
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: 'const { OpenAI } = require("openai/src/index.ts");',
-      }),
+      transform(
+        {
+          path: "index.ts",
+          source: 'const { OpenAI } = require("openai/src/index.ts");',
+        },
+        undefined,
+        { migrationConfig }
+      ),
       'const { OpenAI } = require("openai/index");'
     );
   });
@@ -90,13 +132,17 @@ describe("it rewrites imports from src", () => {
 describe("it rewrites fileFromPath to createReadStream", () => {
   test("esm import, class prop", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import { OpenAI } from "openai";
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import { createReadStream } from "node:fs";
         import { OpenAI } from "openai";
@@ -106,13 +152,17 @@ describe("it rewrites fileFromPath to createReadStream", () => {
   });
   test("cjs require, class prop", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const { OpenAI } = require("openai");
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const { createReadStream } = require("node:fs");
         const { OpenAI } = require("openai");
@@ -122,14 +172,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
   });
   test("esm with #!", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           #!/usr/bin/env node
           import { OpenAI } from "openai";
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         #!/usr/bin/env node
         import { createReadStream } from "node:fs";
@@ -140,14 +194,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
   });
   test("cjs with #!", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           #!/usr/bin/env node
           const { OpenAI } = require("openai");
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         #!/usr/bin/env node
         const { createReadStream } = require("node:fs");
@@ -158,13 +216,17 @@ describe("it rewrites fileFromPath to createReadStream", () => {
   });
   test("esm ns import", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import * as OpenAI from "openai";
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import { createReadStream } from "node:fs";
         import * as OpenAI from "openai";
@@ -174,13 +236,17 @@ describe("it rewrites fileFromPath to createReadStream", () => {
   });
   test("cjs ns require", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const OpenAI = require("openai");
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const { createReadStream } = require("node:fs");
         const OpenAI = require("openai");
@@ -190,13 +256,17 @@ describe("it rewrites fileFromPath to createReadStream", () => {
   });
   test("esm import generates import", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import { fileFromPath } from "openai";
           const f = fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import { createReadStream } from "node:fs";
 
@@ -206,13 +276,17 @@ describe("it rewrites fileFromPath to createReadStream", () => {
   });
   test("cjs require generate require", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const { fileFromPath } = require("openai");
           const f = fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const { createReadStream } = require("node:fs");
         const {  } = require("openai");
@@ -222,14 +296,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
   });
   test("mixed import/require generates imports", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const OpenAI = require("openai")
           import { fileFromPath } from "openai/uploads";
           const f = fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import { createReadStream } from "node:fs";
         const OpenAI = require("openai")
@@ -240,14 +318,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
   });
   test("esm reuses fs import", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import { createReadStream } from "node:fs";
           import { OpenAI } from "openai";
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import { createReadStream } from "node:fs";
         import { OpenAI } from "openai";
@@ -255,14 +337,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
       `
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import { createReadStream as x } from "node:fs";
           import { OpenAI } from "openai";
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import { createReadStream as x } from "node:fs";
         import { OpenAI } from "openai";
@@ -270,14 +356,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
       `
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import * as fs from "node:fs";
           import { OpenAI } from "openai";
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import * as fs from "node:fs";
         import { OpenAI } from "openai";
@@ -285,14 +375,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
       `
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import fs from "node:fs";
           import { OpenAI } from "openai";
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import fs from "node:fs";
         import { OpenAI } from "openai";
@@ -302,14 +396,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
   });
   test("cjs reuses fs require", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const { createReadStream } = require("node:fs");
           const { OpenAI } = require("openai");
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const { createReadStream } = require("node:fs");
         const { OpenAI } = require("openai");
@@ -317,14 +415,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
       `
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const crs = require("node:fs").createReadStream;
           const { OpenAI } = require("openai");
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const crs = require("node:fs").createReadStream;
         const { OpenAI } = require("openai");
@@ -332,14 +434,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
       `
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const { createReadStream: x } = require("node:fs");
           const { OpenAI } = require("openai");
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const { createReadStream: x } = require("node:fs");
         const { OpenAI } = require("openai");
@@ -347,14 +453,18 @@ describe("it rewrites fileFromPath to createReadStream", () => {
       `
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const fs = require("node:fs");
           const { OpenAI } = require("openai");
           const f = OpenAI.fileFromPath("file")
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const fs = require("node:fs");
         const { OpenAI } = require("openai");
@@ -368,12 +478,16 @@ describe("it removes imports from uploads that were intended to be internal", ()
   // not implemented for CJS, most of these were TS types and assertion functions so should be ~no require usage
   test("esm import", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import { toFile, isUploadable, BlobLike, type BlobPart, } from "openai/uploads";
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         /*
          * The following exports have been removed as they were not intended to be a part of the public API:
@@ -392,13 +506,17 @@ describe("it removes imports from uploads that were intended to be internal", ()
 describe("it removes shim imports", () => {
   test("esm import", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import "openai/shims/web";
           import OpenAI from "openai";
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         
         import OpenAI from "openai";
@@ -407,47 +525,63 @@ describe("it removes shim imports", () => {
   });
   test("cjs require", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           require("openai/shims/web");
           const { OpenAI } = require("openai");
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         
         const { OpenAI } = require("openai");
       `
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const _ = require("openai/shims/web"), { OpenAI } = require("openai");
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const { OpenAI } = require("openai");
       `
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const { OpenAI } = require("openai"), {} = require("openai/shims/web");
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const { OpenAI } = require("openai");
       `
     );
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const _ = require("openai/shims/web");
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         
       `
@@ -458,13 +592,17 @@ describe("it removes shim imports", () => {
 describe("it turns new ModuleNamespace() into new ModuleNamespace.OpenAI()", () => {
   test("esm import", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import * as OpenAI from "openai";
           new OpenAI();
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import * as OpenAI from "openai";
         new OpenAI.OpenAI();
@@ -473,13 +611,17 @@ describe("it turns new ModuleNamespace() into new ModuleNamespace.OpenAI()", () 
   });
   test("cjs require", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const OpenAI = require("openai");
           new OpenAI();
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const OpenAI = require("openai");
         new OpenAI.OpenAI();
@@ -491,13 +633,17 @@ describe("it turns new ModuleNamespace() into new ModuleNamespace.OpenAI()", () 
 describe("it turns new APIClient() into new OpenAI()", () => {
   test("esm import", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import { APIClient } from "openai/core";
           new APIClient();
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import { OpenAI } from "openai";
 
@@ -507,13 +653,17 @@ describe("it turns new APIClient() into new OpenAI()", () => {
   });
   test("cjs require", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           const Core = require("openai/core");
           new Core.APIClient();
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         const { OpenAI } = require("openai");
 
@@ -526,13 +676,17 @@ describe("it turns new APIClient() into new OpenAI()", () => {
 describe("it updates OpenAI class options", () => {
   test("httpAgent", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import { OpenAI } from "openai";
           new OpenAI({ httpAgent: new SomeAgent() });
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import nodeFetch from "node-fetch";
         import { OpenAI } from "openai";
@@ -549,13 +703,17 @@ describe("it updates OpenAI class options", () => {
   });
   test("httpAgent with existing fetch", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import { OpenAI } from "openai";
           new OpenAI({ httpAgent: new SomeAgent(), fetch: customFetch });
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import { OpenAI } from "openai";
         new OpenAI({
@@ -572,16 +730,172 @@ describe("it updates OpenAI class options", () => {
   });
   test("no change", () => {
     equal(
-      transformer({
-        path: "index.ts",
-        source: dedent`
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
           import { OpenAI } from "openai";
           new OpenAI({ no: {formatting : [changes,here,]} });
         `,
-      }),
+        },
+        undefined,
+        { migrationConfig }
+      ),
       dedent`
         import { OpenAI } from "openai";
         new OpenAI({ no: {formatting : [changes,here,]} });
+      `
+    );
+  });
+});
+
+describe("it renames del -> delete", () => {
+  test("basic", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+          import { OpenAI } from "openai";
+          const x = new OpenAI();
+          x.files.del();
+        `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        import { OpenAI } from "openai";
+        const x = new OpenAI();
+        x.files.delete();
+      `
+    );
+  });
+  test("unrelated files.del() call", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+          DriveService.files.del();
+        `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        DriveService.files.del();
+      `
+    );
+  });
+  test("name heuristic", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+          openai.files.del();
+        `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        openai.files.delete();
+      `
+    );
+  });
+  test("name heuristic (class)", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+          this.openai.files.del();
+        `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        this.openai.files.delete();
+      `
+    );
+  });
+});
+
+describe("it fixes path params", () => {
+  test("basic", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+          import { OpenAI } from "openai";
+          const x = new OpenAI();
+          x.vectorStores.files.del('a', 'b');
+        `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        import { OpenAI } from "openai";
+        const x = new OpenAI();
+        x.vectorStores.files.delete('b', {
+          vector_store_id: 'a'
+        });
+      `
+    );
+  });
+  test("with encodeURIComponent", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+          import { OpenAI } from "openai";
+          const x = new OpenAI();
+          x.vectorStores.files.del(encodeURIComponent('a'), encodeURIComponent('b'));
+        `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        import { OpenAI } from "openai";
+        const x = new OpenAI();
+        x.vectorStores.files.delete('b', {
+          vector_store_id: 'a'
+        });
+      `
+    );
+  });
+});
+
+describe("it stops using overloads", () => {
+  test("basic", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+          import { OpenAI } from "openai";
+          const x = new OpenAI();
+          x.vectorStores.fileBatches.listFiles('a', 'b', {timeout: 1});
+        `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        import { OpenAI } from "openai";
+        const x = new OpenAI();
+        x.vectorStores.fileBatches.listFiles('b', {
+          vector_store_id: 'a'
+        }, {
+          timeout: 1
+        });
       `
     );
   });
