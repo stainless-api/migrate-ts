@@ -631,8 +631,10 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
       ) {
         joinedKeys = keys.slice(1, -1).join(".");
       } else {
-        const classIndex = keys.findIndex((e) =>
-          e.toLowerCase().includes(clientClass.toLowerCase())
+        const classIndex = keys.findIndex(
+          (e) =>
+            e === "client" ||
+            e.toLowerCase().includes(clientClass.toLowerCase())
         );
         if (classIndex === -1) return;
         joinedKeys = keys.slice(classIndex + 1, -1).join(".");

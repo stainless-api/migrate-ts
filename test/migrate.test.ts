@@ -822,6 +822,94 @@ describe("it renames del -> delete", () => {
       `
     );
   });
+  test("name heuristic (class, private)", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+            class X {
+              #openai
+              constructor() {
+                this.#openai.files.delete();
+              }
+            }
+          `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        class X {
+          #openai
+          constructor() {
+            this.#openai.files.delete();
+          }
+        }
+      `
+    );
+  });
+  test("name heuristic (client)", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+          client.files.del();
+        `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        client.files.delete();
+      `
+    );
+  });
+  test("name heuristic (client, class)", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+          this.client.files.del();
+        `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        this.client.files.delete();
+      `
+    );
+  });
+  test("name heuristic (client, class, private)", () => {
+    equal(
+      transform(
+        {
+          path: "index.ts",
+          source: dedent`
+            class X {
+              #client
+              constructor() {
+                this.#client.files.delete();
+              }
+            }
+          `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        class X {
+          #client
+          constructor() {
+            this.#client.files.delete();
+          }
+        }
+      `
+    );
+  });
 });
 
 describe("it fixes path params", () => {
