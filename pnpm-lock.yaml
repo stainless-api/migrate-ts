@@ -42,6 +42,9 @@ importers:
       esbuild:
         specifier: ^0.25.1
         version: 0.25.1
+      find-up-simple:
+        specifier: ^1.0.1
+        version: 1.0.1
       typescript:
         specifier: ^5.8.2
         version: 5.8.2
@@ -464,6 +467,10 @@ packages:
   find-cache-dir@2.1.0:
     resolution: {integrity: sha512-Tq6PixE0w/VMFfCgbONnkiQIVol/JJL7nRMi20fqzA4NRs9AfeqMGeRdPi3wIhYkxjeBaWh2rxwapn5Tu3IqOQ==}
     engines: {node: '>=6'}
+
+  find-up-simple@1.0.1:
+    resolution: {integrity: sha512-afd4O7zpqHeRyg4PfDQsXmlDe2PfdHtJt6Akt8jOWaApLOZk5JXs6VMR29lz03pRe9mpykrRCYIYxaJYcfpncQ==}
+    engines: {node: '>=18'}
 
   find-up@3.0.0:
     resolution: {integrity: sha512-1yD6RmLI1XBfxugvORwlck6f75tYL+iR0jqwsOrOxMZyGYqUuDhJ0l4AXdO1iX/FTs9cBAMEk1gWSEx1kSbylg==}
@@ -1082,6 +1089,8 @@ snapshots:
       commondir: 1.0.1
       make-dir: 2.1.0
       pkg-dir: 3.0.0
+
+  find-up-simple@1.0.1: {}
 
   find-up@3.0.0:
     dependencies:

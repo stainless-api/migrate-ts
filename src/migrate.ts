@@ -9,7 +9,8 @@ import traverse, {
 import generate from "@babel/generator";
 import MagicString from "magic-string";
 import { readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, dirname, relative } from "node:path";
+import { findUpSync } from "find-up-simple";
 
 interface FileInfo {
   /** The path to the current file. */
@@ -906,6 +907,24 @@ if (typeof require !== "undefined" && require.main === module) {
     options.migrationConfig = JSON.parse(
       readFileSync(options.migrationConfig, "utf-8")
     );
+    if (options.gitignore) {
+      const path = findUpSync(".gitignore");
+      if (path) {
+        options.ignorePattern.push(".git");
+        options.ignorePattern.push(
+          ...readFileSync(path, "utf-8")
+            .trim()
+            .split(/\r?\n/g)
+            .map((e) =>
+              e[0] === "/"
+                ? relative(process.cwd(), dirname(path)).replace(/.$/, "$&/" ) +
+                  e.slice(1)
+                : e
+            )
+        );
+      }
+      delete options.gitignore;
+    }
     if (positionalArguments.length === 0 && !options.stdin) {
       process.stderr.write(
         "Error: You have to provide at least one file/directory to transform." +
