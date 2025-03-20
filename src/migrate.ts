@@ -53,8 +53,8 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
     methods: {
       base: string;
       name: string;
-      v1Name: string | undefined;
-      v1Params:
+      oldName: string | undefined;
+      oldParams:
         | (
             | {
                 type: "param";
@@ -65,7 +65,7 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
             | { type: "options" }
           )[]
         | undefined;
-      v2Params:
+      params:
         | (
             | {
                 type: "param";
@@ -643,10 +643,10 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
       const method = methods.find(
         (e) =>
           e.base === joinedKeys &&
-          (e.name === keys.at(-1) || e.v1Name === keys.at(-1))
+          (e.name === keys.at(-1) || e.oldName === keys.at(-1))
       );
       if (method) {
-        if (method.v1Name && keys.at(-1) === method.v1Name) {
+        if (method.oldName && keys.at(-1) === method.oldName) {
           magicString.overwrite(
             n.node.property.start!,
             n.node.property.end!,
@@ -655,9 +655,9 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
               : JSON.stringify(method.name)
           );
         }
-        const { v1Params } = method;
+        const { oldParams } = method;
         const parentNode = n.parent;
-        if (v1Params && parentNode.type === "CallExpression") {
+        if (oldParams && parentNode.type === "CallExpression") {
           let args = parentNode.arguments.filter((e): e is t.Expression => {
             if (
               e.type !== "SpreadElement" &&
@@ -672,10 +672,10 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
           });
           if (args.length !== parentNode.arguments.length) return;
           args = args.map((e, i) => {
-            const v1 = v1Params[i];
-            return v1 &&
-              v1.type === "param" &&
-              v1.location === "path" &&
+            const old = oldParams[i];
+            return old &&
+              old.type === "param" &&
+              old.location === "path" &&
               e.type === "CallExpression" &&
               e.callee.type === "Identifier" &&
               e.callee.name === "encodeURIComponent" &&
@@ -685,14 +685,14 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
               ? e.arguments[0]
               : e;
           });
-          let options = args[v1Params.length - 1];
+          let options = args[oldParams.length - 1];
           const paramIndex =
-            v1Params.at(-2)?.type === "params" ? v1Params.length - 2 : -1;
-          const p = v1Params[paramIndex];
+            oldParams.at(-2)?.type === "params" ? oldParams.length - 2 : -1;
+          const p = oldParams[paramIndex];
           const paramsInfo = p?.type === "params" && p;
           let params = args[paramIndex];
           let positionals = Object.fromEntries(
-            v1Params.flatMap((e, i) =>
+            oldParams.flatMap((e, i) =>
               e.type !== "param"
                 ? []
                 : [[e.key, args[i] || t.identifier("undefined")]]
@@ -732,7 +732,7 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
             options = params;
             params = t.identifier("undefined");
           }
-          args = method.v2Params!.map((e) => {
+          args = method.params!.map((e) => {
             if (e.type === "param") {
               const value = positionals[e.key!];
               delete positionals[e.key!];
