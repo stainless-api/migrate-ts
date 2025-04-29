@@ -46,10 +46,130 @@ const regexp = (str: TemplateStringsArray, ...params: (string | RegExp)[]) =>
     )
   );
 
+import type { DiffType } from "@std/internal/types";
+import pc from "picocolors";
+import { diff } from "@std/internal/diff";
+import jsTokens, { type JSXToken, type Token } from "js-tokens";
+function createSign(diffType: DiffType): string {
+  switch (diffType) {
+    case "added":
+      return "+";
+    case "removed":
+      return "-";
+    default:
+      return " ";
+  }
+}
+function createColor(
+  diffType: DiffType,
+  background = false
+): (s: string) => string {
+  switch (diffType) {
+    case "added":
+      return (s) =>
+        background ? pc.bgGreen(pc.white(s)) : pc.green(pc.bold(s));
+    case "removed":
+      return (s) => (background ? pc.bgRed(pc.white(s)) : pc.red(pc.bold(s)));
+    default:
+      return pc.white;
+  }
+}
+
+/**
+ * RegExp to test for the three types of brackets.
+ */
+import {
+  isStrictReservedWord,
+  isKeyword,
+} from "@babel/helper-validator-identifier";
+import type { Formatter } from "picocolors/types.js";
+const sometimesKeywords = new Set(["as", "async", "from", "get", "of", "set"]);
+const colorize = function (token: Token | JSXToken): Formatter {
+  if (token.type === "IdentifierName" || token.type === "JSXIdentifier") {
+    if (
+      isKeyword(token.value) ||
+      isStrictReservedWord(token.value, true) ||
+      sometimesKeywords.has(token.value)
+    ) {
+      return pc.cyan;
+    }
+
+    return pc.blue;
+  }
+
+  switch (token.type) {
+    case "NumericLiteral":
+      return pc.yellow;
+
+    case "StringLiteral":
+    case "JSXString":
+    case "NoSubstitutionTemplate":
+      return pc.yellow;
+
+    case "RegularExpressionLiteral":
+      return pc.magenta;
+
+    case "Punctuator":
+    case "JSXPunctuator":
+      return String;
+
+    case "MultiLineComment":
+    case "SingleLineComment":
+      return pc.gray;
+
+    case "Invalid":
+    case "JSXInvalid":
+      return String;
+
+    default:
+      return String;
+  }
+};
+export function print(file: string, source: string, out: string) {
+  const diffResult = diff(source.split("\n"), out.split("\n"));
+  const highlightedLines = [""];
+  for (const token of jsTokens(source, { jsx: file.endsWith("x") })) {
+    const color = colorize(token);
+    const lines = token.value.split("\n");
+    highlightedLines[highlightedLines.length - 1] += color(lines.shift());
+    while (lines.length) {
+      highlightedLines.push("");
+      highlightedLines[highlightedLines.length - 1] += color(lines.shift());
+    }
+  }
+  const gutterSize = highlightedLines.length.toString().length;
+  let lineNo = 0;
+  const diffMessages = diffResult.map((result) => {
+    if (result.type !== "added") lineNo++;
+    const color = createColor(result.type);
+    const colorBg = createColor(result.type, true);
+    return `${colorBg(
+      " " +
+        createSign(result.type) +
+        " " +
+        (result.type === "added"
+          ? "~".repeat((lineNo + "").length)
+          : lineNo + ""
+        ).padStart(gutterSize) +
+        "▕"
+    )} ${
+      result.type === "common"
+        ? highlightedLines[lineNo - 1]
+        : color(result.value)
+    }\n`;
+  });
+  const title = " changes for " + file + ": ";
+  return `\n${pc.dim("┌" + "─".repeat(title.length) + "┐")}\n${pc.dim(
+    "│"
+  )}${pc.bold(title)}${pc.dim("│")}\n${pc.dim(
+    "└" + "─".repeat(title.length) + "┘"
+  )}\n${diffMessages.join("")}\n`;
+}
 export default function transformer(file: FileInfo, _: unknown, options: any) {
   let pkg: string,
     githubRepo: string,
     clientClass: string,
+    baseClientClass: string | undefined,
     methods: {
       base: string;
       name: string;
@@ -78,7 +198,8 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
         | undefined;
     }[];
 
-  ({ pkg, githubRepo, clientClass, methods } = options.migrationConfig);
+  ({ pkg, githubRepo, clientClass, baseClientClass, methods } =
+    options.migrationConfig);
   const magicString = new MagicString(file.source);
   const tsParser = file.path.match(/\.[mc]?([tj]sx?)$/i)?.[1];
   if (tsParser && basename(file.path).includes(".d.")) return;
@@ -260,7 +381,9 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
           ? path.parentPath.parentPath
           : path.parentPath;
       if (declarator?.type === "ExpressionStatement") {
-        if (regexp`^${pkg}\/(_?shims($|\/)|core(\.m?js)?)`.test(importSource)) {
+        if (
+          regexp`^${pkg}\/(_?shims($|\/)|core(\.m?js)?$)`.test(importSource)
+        ) {
           removeNode(declarator);
         }
         return;
@@ -272,7 +395,7 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
         return;
 
       let removedDeclarator = false;
-      if (regexp`^${pkg}\/(_?shims($|\/)|core(\.m?js)?)`.test(importSource)) {
+      if (regexp`^${pkg}\/(_?shims($|\/)|core(\.m?js)?$)`.test(importSource)) {
         removeNode(declarator);
         removedDeclarator = true;
       }
@@ -446,7 +569,7 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
       if (!path.node.specifiers!.length) {
         removeNode(path);
       } else if (
-        regexp`^${pkg}\/(_?shims($|\/)|core(\.m?js)?)`.test(
+        regexp`^${pkg}\/(_?shims($|\/)|core(\.m?js)?$)`.test(
           path.node.source.value + ""
         )
       ) {
@@ -505,7 +628,7 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
         magicString.overwrite(
           ref.node.start!,
           ref.node.end!,
-          importName(clientClass, pkg)
+          importName(baseClientClass ?? clientClass, pkg)
         );
         isClientClass = true;
       }
@@ -786,7 +909,7 @@ if (typeof require !== "undefined" && require.main === module) {
    * LICENSE file in the root directory of this source tree.
    */
 
-  const Runner = require("jscodeshift/src/Runner.js");
+  const Runner = require("./jscodeshift/src/Runner.js");
 
   const pkg = require("../package.json");
 
@@ -803,10 +926,11 @@ if (typeof require !== "undefined" && require.main === module) {
     .sort()
     .join(",");
 
-  const parser = require("jscodeshift/src/argsParser").options({
+  const parser = require("./argsParser.cjs").options({
     cpus: {
       display_index: 1,
       abbr: "c",
+      aliases: ["-j"],
       help: "start at most N child processes to process source files",
       defaultHelp: "max(all - 1, 1)",
       metavar: "N",
@@ -824,6 +948,7 @@ if (typeof require !== "undefined" && require.main === module) {
     dry: {
       display_index: 2,
       abbr: "d",
+      aliases: ["--dry-run", "--dryRun", "--dryrun"],
       flag: true,
       default: false,
       help: "dry run (no changes are made to files)",
@@ -832,8 +957,8 @@ if (typeof require !== "undefined" && require.main === module) {
       display_index: 11,
       abbr: "p",
       flag: true,
-      default: false,
       help: "print transformed files to stdout, useful for development",
+      defaultHelp: "true if dry run",
     },
     extensions: {
       display_index: 3,
@@ -844,6 +969,7 @@ if (typeof require !== "undefined" && require.main === module) {
     ignorePattern: {
       display_index: 7,
       full: "ignore-pattern",
+      aliases: ["ignore"],
       list: true,
       help: "ignore files that match a provided glob expression",
       metavar: "GLOB",
@@ -895,6 +1021,9 @@ if (typeof require !== "undefined" && require.main === module) {
       flag: true,
       default: false,
     },
+    migrationConfig: {
+      hidden: true,
+    },
   });
 
   let options, positionalArguments;
@@ -907,6 +1036,7 @@ if (typeof require !== "undefined" && require.main === module) {
     options.migrationConfig = JSON.parse(
       readFileSync(options.migrationConfig, "utf-8")
     );
+    options.print ??= options.dry;
     if (options.gitignore) {
       const path = findUpSync(".gitignore");
       if (path) {
@@ -917,7 +1047,7 @@ if (typeof require !== "undefined" && require.main === module) {
             .split(/\r?\n/g)
             .map((e) =>
               e[0] === "/"
-                ? relative(process.cwd(), dirname(path)).replace(/.$/, "$&/" ) +
+                ? relative(process.cwd(), dirname(path)).replace(/.$/, "$&/") +
                   e.slice(1)
                 : e
             )

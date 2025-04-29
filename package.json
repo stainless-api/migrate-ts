@@ -1,9 +1,9 @@
 {
   "name": "@stainless-api/migrate",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "scripts": {
     "test": "node --test --experimental-strip-types",
-    "build": "esbuild src/migrate.ts --target=node18 --platform=node --external:@babel --external:jscodeshift --external:magic-string --external:ts-dedent --bundle --format=cjs --outfile=dist/migrate.cjs"
+    "build": "rm -rf dist/jscodeshift && cp -r jscodeshift dist/jscodeshift && esbuild src/migrate.ts --target=node18 --platform=node --external:@babel --external:magic-string --external:ts-dedent --external:./jscodeshift/* --bundle --format=cjs --outfile=dist/migrate.cjs"
   },
   "bin": "dist/migrate.cjs",
   "files": [
@@ -17,20 +17,29 @@
   "type": "module",
   "dependencies": {
     "@babel/generator": "^7.26.10",
+    "@babel/helper-validator-identifier": "^7.25.9",
     "@babel/parser": "^7.26.10",
     "@babel/traverse": "^7.26.10",
     "@babel/types": "^7.26.10",
-    "jscodeshift": "^17.1.2",
+    "graceful-fs": "^4.2.4",
+    "js-tokens": "^9.0.1",
     "magic-string": "^0.30.17",
-    "ts-dedent": "^2.2.0"
+    "micromatch": "^4.0.7",
+    "neo-async": "^2.5.0",
+    "picocolors": "^1.0.1",
+    "tmp": "^0.2.3",
+    "ts-dedent": "^2.2.0",
+    "write-file-atomic": "^5.0.1"
   },
   "devDependencies": {
-    "find-up-simple": "^1.0.1",
+    "@std/internal": "jsr:1.0.6",
     "@types/babel__generator": "^7.6.8",
+    "@types/babel__helper-validator-identifier": "^7.15.2",
     "@types/babel__traverse": "^7.20.6",
     "@types/node": "22",
     "esbuild": "^0.25.1",
+    "find-up-simple": "^1.0.1",
     "typescript": "^5.8.2"
   },
-  "packageManager": "pnpm@9.15.5+sha512.845196026aab1cc3f098a0474b64dfbab2afe7a1b4e91dd86895d8e4aa32a7a6d03049e2d0ad770bbe4de023a7122fb68c1a1d6e0d033c7076085f9d5d4800d4"
+  "packageManager": "pnpm@10.10.0+sha512.d615db246fe70f25dcfea6d8d73dee782ce23e2245e3c4f6f888249fb568149318637dca73c2c5c8ef2a4ca0d5657fb9567188bfab47f566d1ee6ce987815c39"
 }
