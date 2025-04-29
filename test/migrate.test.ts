@@ -693,7 +693,7 @@ describe("it updates OpenAI class options", () => {
         new OpenAI({
           fetchOptions: {
             // Using node-fetch is not recommended, but it is required to use legacy node:http Agents.
-            // If you were only using httpAgent to configure proxies, check [our docs](https://github.com/openai/openai-node/blob/alpha#configuring-proxies) for up-to-date instructions.
+            // If you were only using httpAgent to configure proxies, check [our docs](${migrationConfig.githubRepo}#configuring-proxies) for up-to-date instructions.
             agent: new SomeAgent()
           },
           fetch: nodeFetch
@@ -719,7 +719,7 @@ describe("it updates OpenAI class options", () => {
         new OpenAI({
           fetchOptions: {
             // Using node-fetch is not recommended, but it is required to use legacy node:http Agents.
-            // If you were only using httpAgent to configure proxies, check [our docs](https://github.com/openai/openai-node/blob/alpha#configuring-proxies) for up-to-date instructions.
+            // If you were only using httpAgent to configure proxies, check [our docs](${migrationConfig.githubRepo}#configuring-proxies) for up-to-date instructions.
             agent: new SomeAgent()
           },
           // If the custom fetch function you are using isn't derived from node-fetch, your agent option was being ignored, and fetchOptions can safely be removed.
