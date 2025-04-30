@@ -777,13 +777,15 @@ describe("it renames del -> delete", () => {
         {
           path: "index.ts",
           source: dedent`
-          DriveService.files.del();
-        `,
+            // not openai
+            DriveService.files.del();
+          `,
         },
         undefined,
         { migrationConfig }
       ),
       dedent`
+        // not openai
         DriveService.files.del();
       `
     );

@@ -10,7 +10,7 @@ import generate from "@babel/generator";
 import MagicString from "magic-string";
 import { readFileSync } from "node:fs";
 import { basename, dirname, relative } from "node:path";
-import { findUpSync } from "find-up-simple";
+export { findUpSync } from "find-up-simple";
 
 interface FileInfo {
   /** The path to the current file. */
@@ -125,24 +125,69 @@ const colorize = function (token: Token | JSXToken): Formatter {
       return String;
   }
 };
-export function print(file: string, source: string, out: string) {
+/** Ways that lines in a diff can be different. */
+export type DiffType = "removed" | "common" | "added";
+
+/**
+ * Represents the result of a diff operation.
+ *
+ * @typeParam T The type of the value in the diff result.
+ */
+export interface DiffResult<T> {
+  /** The type of the diff. */
+  type: DiffType;
+  /** The value of the diff. */
+  value: T;
+  /** The details of the diff. */
+  details?: DiffResult<T>[];
+}
+
+/**
+ * Interface for skipped lines in diff output
+ */
+interface SkippedLines {
+  type: "skipped";
+  value: string;
+  skippedLineCount: number;
+}
+
+export function print(file: string, source: string, out: string): string {
   const diffResult = diff(source.split("\n"), out.split("\n"));
-  const highlightedLines = [""];
+
+  // Filter common lines that are far from changes
+  const filteredDiffResult = filterCommonLines<string>(diffResult, 5);
+
+  const highlightedLines: string[] = [""];
   for (const token of jsTokens(source, { jsx: file.endsWith("x") })) {
     const color = colorize(token);
     const lines = token.value.split("\n");
-    highlightedLines[highlightedLines.length - 1] += color(lines.shift());
+    highlightedLines[highlightedLines.length - 1] += color(lines.shift() || "");
     while (lines.length) {
       highlightedLines.push("");
-      highlightedLines[highlightedLines.length - 1] += color(lines.shift());
+      highlightedLines[highlightedLines.length - 1] += color(
+        lines.shift() || ""
+      );
     }
   }
+
   const gutterSize = highlightedLines.length.toString().length;
   let lineNo = 0;
-  const diffMessages = diffResult.map((result) => {
+
+  const diffMessages = filteredDiffResult.map((result) => {
+    if (result.type === "skipped") {
+      // For skipped lines, advance the line counter and create a visual indicator
+      if ((result as SkippedLines).skippedLineCount) {
+        lineNo += (result as SkippedLines).skippedLineCount;
+      }
+      return `${pc.dim("   " + "…".padStart(gutterSize) + "▕")} ${pc.dim(
+        result.value
+      )}\n`;
+    }
+
     if (result.type !== "added") lineNo++;
     const color = createColor(result.type);
     const colorBg = createColor(result.type, true);
+
     return `${colorBg(
       " " +
         createSign(result.type) +
@@ -158,12 +203,103 @@ export function print(file: string, source: string, out: string) {
         : color(result.value)
     }\n`;
   });
+
   const title = " changes for " + file + ": ";
   return `\n${pc.dim("┌" + "─".repeat(title.length) + "┐")}\n${pc.dim(
     "│"
   )}${pc.bold(title)}${pc.dim("│")}\n${pc.dim(
     "└" + "─".repeat(title.length) + "┘"
   )}\n${diffMessages.join("")}\n`;
+}
+
+/**
+ * Filters common lines from diff results that are more than maxDistance
+ * away from any added or removed line.
+ *
+ * @param diffResult - The original diff result array
+ * @param maxDistance - Maximum distance (in lines) from a change to keep common lines
+ * @returns A filtered diff result with skipped line indicators
+ */
+function filterCommonLines<T>(
+  diffResult: DiffResult<T>[],
+  maxDistance: number
+): (DiffResult<T> | SkippedLines)[] {
+  // First pass: mark the lines that are within maxDistance of a change
+  const nearChange = new Array(diffResult.length).fill(false);
+
+  // Find all changed lines (added or removed)
+  const changedIndices = diffResult
+    .map((result, index) => (result.type !== "common" ? index : -1))
+    .filter((index) => index !== -1);
+
+  // No changes? Return the original
+  if (changedIndices.length === 0) {
+    return diffResult;
+  }
+
+  // Mark lines that are within maxDistance of any change
+  for (let i = 0; i < diffResult.length; i++) {
+    // Skip if it's already a change
+    if (diffResult[i]!.type !== "common") {
+      nearChange[i] = true;
+      continue;
+    }
+
+    // Check distance to nearest change
+    const distanceToChange = Math.min(
+      ...changedIndices.map((changeIndex) => Math.abs(i - changeIndex))
+    );
+
+    if (distanceToChange <= maxDistance) {
+      nearChange[i] = true;
+    }
+  }
+
+  // Build the filtered result
+  const filteredResult: (DiffResult<T> | SkippedLines)[] = [];
+  let skippedLines = 0;
+  let consecutiveSkipped: DiffResult<T>[] = [];
+
+  for (let i = 0; i < diffResult.length; i++) {
+    if (nearChange[i] || diffResult[i]!.type !== "common") {
+      // If we skipped lines before this, add an ellipsis marker with line count
+      if (skippedLines > 0) {
+        // Calculate how many line numbers we're skipping (for correct numbering)
+        // We need to count removed lines but not added lines
+        const skippedLineCount = consecutiveSkipped.filter(
+          (item) => item.type !== "added"
+        ).length;
+
+        filteredResult.push({
+          type: "skipped",
+          value: `${skippedLines} line${skippedLines > 1 ? "s" : ""} skipped`,
+          skippedLineCount: skippedLineCount,
+        });
+        skippedLines = 0;
+        consecutiveSkipped = [];
+      }
+      filteredResult.push(diffResult[i]!);
+    } else {
+      skippedLines++;
+      consecutiveSkipped.push(diffResult[i]!);
+    }
+  }
+
+  // If we ended with skipped lines, add the ellipsis marker
+  if (skippedLines > 0) {
+    // Calculate how many line numbers we're skipping
+    const skippedLineCount = consecutiveSkipped.filter(
+      (item) => item.type !== "added"
+    ).length;
+
+    filteredResult.push({
+      type: "skipped",
+      value: `${skippedLines} line${skippedLines > 1 ? "s" : ""} skipped`,
+      skippedLineCount: skippedLineCount,
+    });
+  }
+
+  return filteredResult;
 }
 export default function transformer(file: FileInfo, _: unknown, options: any) {
   let pkg: string,
@@ -227,6 +363,7 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
       magicString.remove(trailingComma, trailingComma + 1);
     }
   }
+  if (!regexp`client|${pkg}|${clientClass}`.test(file.source)) return;
   const parsed = parser.parse(file.source, {
     sourceFilename: file.path,
     sourceType: "module",
@@ -260,6 +397,10 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
         "throwExpressions",
         tsParser?.[0] === "t" && "typescript",
         (tsParser?.[0] !== "t" || tsParser?.at(-1) === "x") && "jsx",
+        tsParser?.[0] !== "t" &&
+          file.source.slice(0, 1000).includes("@flow") &&
+          "flow",
+        "deprecatedImportAssert",
       ] satisfies (parser.ParserPlugin | false)[] as (
         | parser.ParserPlugin
         | false
@@ -481,6 +622,7 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
         );
       }
       const { specifiers } = path.node;
+      const ogSpecifiersLength = specifiers!.length;
       const isIndex = regexp`^${pkg}(\/index(\.m?js)?)?$`.test(importSource);
       const isUploads = regexp`^${pkg}(\/uploads(\.m?js)?)?$`.test(
         importSource
@@ -566,7 +708,11 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
             indent
         );
       }
-      if (!path.node.specifiers!.length) {
+      if (
+        regexp`^(${pkg})($|\/)`.test(path.node.source.value) &&
+        !path.node.specifiers!.length &&
+        ogSpecifiersLength
+      ) {
         removeNode(path);
       } else if (
         regexp`^${pkg}\/(_?shims($|\/)|core(\.m?js)?$)`.test(
@@ -1037,24 +1183,6 @@ if (typeof require !== "undefined" && require.main === module) {
       readFileSync(options.migrationConfig, "utf-8")
     );
     options.print ??= options.dry;
-    if (options.gitignore) {
-      const path = findUpSync(".gitignore");
-      if (path) {
-        options.ignorePattern.push(".git");
-        options.ignorePattern.push(
-          ...readFileSync(path, "utf-8")
-            .trim()
-            .split(/\r?\n/g)
-            .map((e) =>
-              e[0] === "/"
-                ? relative(process.cwd(), dirname(path)).replace(/.$/, "$&/") +
-                  e.slice(1)
-                : e
-            )
-        );
-      }
-      delete options.gitignore;
-    }
     if (positionalArguments.length === 0 && !options.stdin) {
       process.stderr.write(
         "Error: You have to provide at least one file/directory to transform." +

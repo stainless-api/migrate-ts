@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
@@ -16,6 +18,8 @@ const https = require("https");
 const ignores = require("./ignoreFiles");
 
 const tmp = require("tmp");
+const { readdir, realpath } = require("fs/promises");
+const { extname } = require("path");
 tmp.setGracefulCleanup();
 
 const availableCpus = Math.max(require("os").cpus().length - 1, 1);
@@ -48,31 +52,21 @@ const bufferedWrite = (function () {
 
 const log = {
   ok(msg, verbose) {
-    verbose >= 2 && bufferedWrite(pc.bgGreen(pc.white(" OKK ")) + msg);
+    verbose >= 2 && bufferedWrite(pc.bgGreen(pc.white(" OKK ")) + " " + msg);
   },
   nochange(msg, verbose) {
-    verbose >= 1 && bufferedWrite(pc.bgYellow(pc.white(" NOC ")) + msg);
+    verbose >= 1 && bufferedWrite(pc.bgYellow(pc.white(" NOC ")) + " " + msg);
   },
   skip(msg, verbose) {
-    verbose >= 1 && bufferedWrite(pc.bgYellow(pc.white(" SKIP ")) + msg);
+    verbose >= 1 && bufferedWrite(pc.bgYellow(pc.white(" SKIP ")) + " " + msg);
   },
   error(msg, verbose) {
-    verbose >= 0 && bufferedWrite(pc.bgRed(pc.white(" ERR ")) + msg);
+    verbose >= 0 && bufferedWrite(pc.bgRed(pc.white(" ERR ")) + " " + msg);
   },
 };
 
 function report({ file, msg }) {
-  bufferedWrite(lineBreak(`${pc.bgBlue(pc.white(" REP "))}${file} ${msg}`));
-}
-
-function concatAll(arrays) {
-  const result = [];
-  for (const array of arrays) {
-    for (const element of array) {
-      result.push(element);
-    }
-  }
-  return result;
+  bufferedWrite(lineBreak(`${pc.bgBlue(pc.white(" REP "))} ${file} ${msg}`));
 }
 
 function showFileStats(fileStats) {
@@ -94,74 +88,99 @@ function showStats(stats) {
     process.stdout.write(name + ": " + stats[name] + "\n")
   );
 }
+/**
+ * @param {string} dir
+ * @param {(arg0: string) => any} filter
+ * @param {Set<string>} seen
+ */
+async function* dirFiles(dir, filter, seen) {
+  // Create a queue for breadth-first traversal
+  const queue = [dir];
 
-function dirFiles(dir, callback, acc) {
-  // acc stores files found so far and counts remaining paths to be processed
-  acc = acc || { files: [], remaining: 1 };
+  // Process directory by directory in breadth-first order
+  while (queue.length > 0) {
+    const currentDir = queue.shift() + "";
 
-  function done() {
-    // decrement count and return if there are no more paths left to process
-    if (!--acc.remaining) {
-      callback(acc.files);
+    try {
+      const files = await readdir(currentDir);
+
+      for (const file of files) {
+        let name = path.join(currentDir, file);
+        const realName = await realpath(name);
+
+        if (seen.has(realName)) continue;
+        seen.add(realName);
+
+        const stats = await new Promise((resolve) =>
+          fs.stat(name, (err, stats) => {
+            if (err) {
+              // probably a symlink issue
+              process.stdout.write(
+                'Skipping path "' + name + '" which does not exist.\n'
+              );
+              resolve(null);
+            } else if (ignores.shouldIgnore(name)) {
+              // ignore the path
+              resolve(null);
+            } else {
+              resolve(stats);
+            }
+          })
+        );
+
+        if (!stats) continue;
+
+        if (stats.isDirectory()) {
+          // Add directory to queue instead of immediate recursion
+          queue.push(name + "/");
+        } else if (filter(name)) {
+          yield name;
+        }
+      }
+    } catch (error) {
+      process.stderr.write(
+        `Error reading directory ${currentDir}: ${error.message}\n`
+      );
     }
   }
+}
 
-  fs.readdir(dir, (err, files) => {
-    // if dir does not exist or is not a directory, bail
-    // (this should not happen as long as calls do the necessary checks)
-    if (err) throw err;
+async function* getAllFiles(paths, filter) {
+  const seen = new Set();
+  // Create a queue for directories to process later
+  const dirQueue = [];
 
-    acc.remaining += files.length;
-    files.forEach((file) => {
-      let name = path.join(dir, file);
-      fs.stat(name, (err, stats) => {
+  // First process all direct files from input paths
+  for (const file of paths) {
+    const stat = await new Promise((resolve) => {
+      fs.lstat(file, (err, stat) => {
         if (err) {
-          // probably a symlink issue
-          process.stdout.write(
-            'Skipping path "' + name + '" which does not exist.\n'
+          process.stderr.write(
+            "Skipping path " + file + " which does not exist. \n"
           );
-          done();
-        } else if (ignores.shouldIgnore(name)) {
-          // ignore the path
-          done();
-        } else if (stats.isDirectory()) {
-          dirFiles(name + "/", callback, acc);
+          resolve(null);
         } else {
-          acc.files.push(name);
-          done();
+          resolve(stat);
         }
       });
     });
-    done();
-  });
-}
 
-function getAllFiles(paths, filter) {
-  return Promise.all(
-    paths.map(
-      (file) =>
-        new Promise((resolve) => {
-          fs.lstat(file, (err, stat) => {
-            if (err) {
-              process.stderr.write(
-                "Skipping path " + file + " which does not exist. \n"
-              );
-              resolve([]);
-              return;
-            }
+    if (!stat) continue;
 
-            if (stat.isDirectory()) {
-              dirFiles(file, (list) => resolve(list.filter(filter)));
-            } else if (!filter(file) || ignores.shouldIgnore(file)) {
-              // ignoring the file
-              resolve([]);
-            } else {
-              resolve([file]);
-            }
-          });
-        })
-    )
-  ).then(concatAll);
+    if (stat.isDirectory()) {
+      // Add to queue instead of immediate processing
+      dirQueue.push(file);
+    } else if (!filter(file) || ignores.shouldIgnore(file)) {
+      // ignoring the file
+    } else {
+      yield file;
+    }
+  }
+
+  // Then process all queued directories
+  for (const dir of dirQueue) {
+    yield* dirFiles(dir, filter, seen);
+  }
 }
 
 function run(transformFile, paths, options) {
@@ -179,9 +198,7 @@ function run(transformFile, paths, options) {
   ignores.addFromFile(options.ignoreConfig);
 
   if (options.gitignore) {
-    let currDirectory = process.cwd();
-    let gitIgnorePath = path.join(currDirectory, ".gitignore");
-    ignores.addFromFile(gitIgnorePath);
+    ignores.useGitIgnore();
   }
 
   if (/^http/.test(transformFile)) {
@@ -227,12 +244,25 @@ function run(transformFile, paths, options) {
     return transform(transformFile);
   }
 
-  function transform(transformFile) {
-    return getAllFiles(
+  async function transform(transformFile) {
+    const files = [];
+    let lastLogged = 0;
+    for await (const path of getAllFiles(
       paths,
-      (name) => !extensions || extensions.indexOf(path.extname(name)) != -1
-    )
-      .then((files) => {
+      (name) => !extensions || extensions.indexOf(extname(name)) != -1
+    )) {
+      const now = performance.now();
+      if (now - lastLogged > 10) {
+        lastLogged = now;
+        process.stderr.write(
+          "\x1b[2KScanning " + path.slice(0, process.stdout.columns - 10) + "\r"
+        );
+      }
+      files.push(path);
+    }
+    process.stderr.write("\x1b[2K");
+    return Promise.resolve()
+      .then(() => {
         const numFiles = files.length;
 
         if (numFiles === 0) {
@@ -250,11 +280,11 @@ function run(transformFile, paths, options) {
         // return the next chunk of work for a free worker
         function next() {
           if (!options.silent && !options.runInBand && index < numFiles) {
-            process.stdout.write(
+            /* process.stdout.write(
               "Sending " +
                 Math.min(chunkSize, numFiles - index) +
                 " files to free worker...\n"
-            );
+            ); */
           }
           return files.slice(index, (index += chunkSize));
         }
@@ -318,7 +348,9 @@ function run(transformFile, paths, options) {
             process.stdout.write("All done. \n");
             showFileStats(fileCounters);
             showStats(statsCounter);
-            process.stdout.write("Time elapsed: " + timeElapsed + "seconds \n");
+            process.stdout.write(
+              "Time elapsed: " + timeElapsed + " seconds \n"
+            );
 
             if (options.failOnError && fileCounters.error > 0) {
               process.exit(1);

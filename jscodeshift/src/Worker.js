@@ -202,14 +202,22 @@ function run(data) {
             callback();
           }
         } catch (err) {
-          updateStatus(
-            "error",
-            file,
-            "Transformation error (" +
-              err.message.replace(/\n/g, " ") +
-              ")\n" +
-              trimStackTrace(err.stack)
-          );
+          if (err instanceof SyntaxError) {
+            updateStatus(
+              "error",
+              file,
+              "SyntaxError: " + err.message.replace(/\n/g, " ")
+            );
+          } else {
+            updateStatus(
+              "error",
+              file,
+              "Transformation error (" +
+                err.message.replace(/\n/g, " ") +
+                ")\n" +
+                trimStackTrace(err.stack)
+            );
+          }
           callback();
         }
       });
