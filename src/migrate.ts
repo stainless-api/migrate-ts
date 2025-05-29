@@ -310,6 +310,7 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
       base: string;
       name: string;
       oldName: string | undefined;
+      oldBase: string | undefined;
       oldParams:
         | (
             | {
@@ -893,6 +894,7 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
     }
     if (p?.type !== "MemberExpression") return;
     n = p as NodePath<t.MemberExpression>;
+    let classKeyIndex: number | undefined;
     if (keys.length) {
       let joinedKeys;
       if (
@@ -900,18 +902,19 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
         clientBindings.has(lookupBinding(path.scope, path.node.name))
       ) {
         joinedKeys = keys.slice(1, -1).join(".");
+        classKeyIndex = 0
       } else {
-        const classIndex = keys.findIndex(
+        classKeyIndex = keys.findIndex(
           (e) =>
             e === "client" ||
             e.toLowerCase().includes(clientClass.toLowerCase())
         );
-        if (classIndex === -1) return;
-        joinedKeys = keys.slice(classIndex + 1, -1).join(".");
+        if (classKeyIndex === -1) return;
+        joinedKeys = keys.slice(classKeyIndex + 1, -1).join(".");
       }
       const method = methods.find(
         (e) =>
-          e.base === joinedKeys &&
+          (e.base === joinedKeys || e.oldBase === joinedKeys) &&
           (e.name === keys.at(-1) || e.oldName === keys.at(-1))
       );
       if (method) {
@@ -924,6 +927,15 @@ export default function transformer(file: FileInfo, _: unknown, options: any) {
               : JSON.stringify(method.name)
           );
         }
+
+        if (method.oldBase && joinedKeys === method.oldBase) {
+          magicString.overwrite(
+            n.node.start!,
+            n.node.end!,
+            (classKeyIndex !== undefined ? keys[classKeyIndex]! + '.' : '') + method.base + '.' + method.name,
+          );
+        }
+
         const { oldParams } = method;
         const parentNode = n.parent;
         if (oldParams && parentNode.type === "CallExpression") {
