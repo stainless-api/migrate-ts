@@ -9,6 +9,11 @@
       "oldName": "del"
     },
     {
+      "base": "chat.completions",
+      "name": "stream",
+      "oldBase": "beta.chat.completions"
+    },
+    {
       "base": "files",
       "name": "delete",
       "oldName": "del"

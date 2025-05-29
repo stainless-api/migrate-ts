@@ -914,6 +914,52 @@ describe("it renames del -> delete", () => {
   });
 });
 
+describe("it strips beta namespaces", () => {
+  test("basic", () => {
+    equal(
+      transform(
+        {
+          path: "foo.ts",
+          source: dedent`
+            import { OpenAI } from "openai";
+            const x = new OpenAI();
+            x.beta.chat.completions.stream();
+          `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        import { OpenAI } from "openai";
+        const x = new OpenAI();
+        x.chat.completions.stream();
+      `
+    );
+  });
+
+  test("leaves migrated code alone", () => {
+    equal(
+      transform(
+        {
+          path: "foo.ts",
+          source: dedent`
+            import { OpenAI } from "openai";
+            const x = new OpenAI();
+            x.chat.completions.stream();
+          `,
+        },
+        undefined,
+        { migrationConfig }
+      ),
+      dedent`
+        import { OpenAI } from "openai";
+        const x = new OpenAI();
+        x.chat.completions.stream();
+      `
+    );
+  });
+});
+
 describe("it fixes path params", () => {
   test("basic", () => {
     equal(
