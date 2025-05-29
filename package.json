@@ -1,6 +1,6 @@
 {
   "name": "@stainless-api/migrate",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "scripts": {
     "test": "node --test --experimental-strip-types",
     "build": "rm -rf dist/jscodeshift && cp -r jscodeshift dist/jscodeshift && esbuild src/migrate.ts --target=node18 --platform=node --external:@babel --external:magic-string --external:ts-dedent --external:./jscodeshift/* --bundle --format=cjs --outfile=dist/migrate.cjs"
